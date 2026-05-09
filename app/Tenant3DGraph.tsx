@@ -27,6 +27,7 @@ type GraphLink = LinkObject<GraphNode> & TenantEdge;
 type Tenant3DGraphProps = {
   nodes: TenantNode[];
   edges: TenantEdge[];
+  darkMode?: boolean;
 };
 
 const TYPE_COLORS = new Map<string, string>([
@@ -39,7 +40,7 @@ const TYPE_COLORS = new Map<string, string>([
   ["ORGANIZATION", "#4338ca"]
 ]);
 
-export function Tenant3DGraph({ nodes, edges }: Tenant3DGraphProps) {
+export function Tenant3DGraph({ nodes, edges, darkMode = false }: Tenant3DGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<ForceGraph3DInstance<GraphNode, GraphLink> | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -89,7 +90,7 @@ export function Tenant3DGraph({ nodes, edges }: Tenant3DGraphProps) {
       graphRef.current = graph;
 
       graph
-        .backgroundColor("#ffffff")
+        .backgroundColor(darkMode ? "#09090b" : "#ffffff")
         .showNavInfo(false)
         .nodeAutoColorBy("type")
         .nodeLabel((node) => `${node.label} (${node.type})`)
@@ -157,7 +158,7 @@ export function Tenant3DGraph({ nodes, edges }: Tenant3DGraphProps) {
       graph?._destructor();
       graphRef.current = null;
     };
-  }, [graphData]);
+  }, [darkMode, graphData]);
 
   return (
     <div className="graph-3d-shell">
