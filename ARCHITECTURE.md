@@ -8,7 +8,7 @@ Coding agents already have repo context, user context, and static instruction fi
 
 AgentGraph turns organizational activity into a queryable memory graph, then compiles minimal task-specific context packs for coding agents.
 
-For the hackathon build, AgentGraph should use OpenClaw as the agent runtime and workflow surface. OpenClaw should not replace the memory graph or context compiler; it should orchestrate ingestion, compilation, and demo actions around them.
+For the hackathon build, OpenClaw is the initial source corpus. AgentGraph is the content and context layer over the OpenClaw repository: it reads OpenClaw issues, PRs, discussions, and docs, then turns that activity into structured memory and compiled agent context.
 
 ## System Overview
 
@@ -28,19 +28,20 @@ GitHub issues + PRs + Discord threads + docs
 
 The `.agent/` directory is a compiled artifact. HydraDB is the actual memory layer.
 
-For the hackathon, OpenClaw sits beside the compiler as the agent-facing control plane:
+For the hackathon, OpenClaw is the datasource:
 
 ```txt
-GitHub / Discord / docs
+OpenClaw repo activity
+GitHub issues + PRs + Discord threads + docs
         |
         v
-   OpenClaw workflows
+extraction + memory graph
         |
         v
-extraction + memory graph + context compiler
+content layer + context compiler
         |
         v
-      .agent/
+compiled .agent/ context
 ```
 
 ## Core Components
@@ -48,20 +49,20 @@ extraction + memory graph + context compiler
 - Event ingestion collects GitHub webhook events, Discord discussions, and documentation changes.
 - Extraction uses Pipeshift to identify decisions, constraints, open questions, implementation intent, and relationships.
 - HydraDB stores the memory graph as the source of truth.
-- OpenClaw runs the hackathon workflow layer for agent actions, channel interaction, and demo orchestration.
 - The context compiler generates minimal issue-specific `.agent` packs.
 - The Next.js UI visualizes issues, PRs, discussions, decisions, and constraints in a 3D graph using `react-force-graph-3d`.
 
-## Hackathon OpenClaw Role
+## OpenClaw Content Layer
 
-OpenClaw should be used as the fastest path to a working agent-facing demo:
+OpenClaw should be used as the initial datasource and demo corpus:
 
-- Trigger workflows from GitHub issues, Discord discussions, and manual demo commands.
-- Run extraction and summarization skills that produce candidate decisions, constraints, questions, and links.
-- Invoke the context compiler for a selected issue or PR.
-- Deliver the generated `.agent` pack back to the user through the demo flow.
+- Ingest OpenClaw GitHub issues, PRs, comments, and repo docs.
+- Add Discord discussions if the source is available during the hackathon.
+- Extract the decisions, constraints, open questions, implementation intent, and relationships embedded in that activity.
+- Present the extracted graph as a content layer over the OpenClaw repository.
+- Compile issue-specific `.agent` context packs for work on OpenClaw tasks.
 
-OpenClaw should not own durable memory. AgentGraph should store durable organizational context in HydraDB so the graph can be queried, visualized, audited, and recompiled independent of any one agent runtime.
+OpenClaw is not an architectural dependency or runtime layer for AgentGraph. It is the first repository whose organizational memory AgentGraph makes queryable and agent-readable.
 
 ## Memory Model
 
@@ -99,24 +100,27 @@ The compiler should avoid dumping broad organizational memory into agent context
 ## Demo Flow
 
 1. User clicks a GitHub issue.
-2. AgentGraph shows related PRs, Discord discussions, docs, decisions, constraints, and questions in a 3D graph.
+2. AgentGraph shows related OpenClaw PRs, Discord discussions, docs, decisions, constraints, and questions in a 3D graph.
 3. User clicks `Compile Context`.
-4. AgentGraph generates `.agent/tasks/issue-123.md` and related minimal context files.
-5. The generated context is used directly by Claude Code, Codex, Cursor, or another coding agent.
+4. AgentGraph generates `.agent/tasks/issue-123.md` and related minimal context files for that OpenClaw task.
+5. The generated context is used directly by Claude Code, Codex, Cursor, or another coding agent working on OpenClaw.
 
 ## Initial Tech Stack
 
-- OpenClaw: hackathon agent runtime, channel surface, and workflow orchestration
 - HydraDB: memory graph
 - Pipeshift: extraction and summarization
 - Render: deployment for frontend, backend, and workers
 - Next.js: web application
 - `react-force-graph-3d`: graph visualization
 
+## Initial Dataset
+
+- OpenClaw repository: first source corpus for issues, PRs, comments, docs, and related discussions
+
 ## Product Principles
 
 - HydraDB is the durable memory layer.
-- OpenClaw is the demo and workflow runtime, not the source of truth.
+- OpenClaw is the first datasource, not the architecture.
 - `.agent/` is generated output.
 - Context should be minimal, issue-specific, and agent-readable.
 - The system should preserve implementation intent, not just summarize activity.
