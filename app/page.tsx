@@ -1,26 +1,33 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useEffect, useState } from "react";
+import { Tenant3DGraph } from "./Tenant3DGraph";
 
-type LoadResponse =
+type TenantGraphResponse =
   | {
       data: {
-        source: {
-          owner: string;
-          repo: string;
-          type: "issue" | "pr";
-          number: number;
-          url: string;
-        };
-        memory: {
+        nodes: Array<{
           id: string;
-          title: string;
-        };
-        stages: Array<{
-          name: string;
-          status: string;
-          note?: string;
+          label: string;
+          type: string;
+          url?: string;
+          sourceId?: string;
         }>;
+        edges: Array<{
+          source: string;
+          target: string;
+          type: string;
+          evidence?: string;
+          sourceDocumentId?: string;
+          confidence?: number;
+        }>;
+        meta: {
+          tenantId: string;
+          subTenantId?: string;
+          sourceCount: number;
+          relationSourceCount: number;
+          maxSources: number;
+        };
       };
     }
   | {
@@ -30,82 +37,78 @@ type LoadResponse =
     };
 
 export default function Home() {
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<LoadResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tenantGraph, setTenantGraph] = useState<TenantGraphResponse | null>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setResult(null);
+  useEffect(() => {
+    let cancelled = false;
 
-    try {
-      const response = await fetch("/api/load-and-connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ url })
-      });
-      const json = (await response.json()) as LoadResponse;
-      setResult(json);
-    } catch (error) {
-      setResult({
-        error: {
-          message: error instanceof Error ? error.message : "Request failed"
+    async function loadGraph() {
+      setLoading(true);
+
+      try {
+        const response = await fetch("/api/tenant-graph?maxSources=10", {
+          cache: "no-store"
+        });
+        const json = (await response.json()) as TenantGraphResponse;
+
+        if (!cancelled) {
+          setTenantGraph(json);
         }
-      });
-    } finally {
-      setLoading(false);
+      } catch (error) {
+        if (!cancelled) {
+          setTenantGraph({
+            error: {
+              message: error instanceof Error ? error.message : "Graph request failed"
+            }
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
-  }
 
-  const succeeded = result && "data" in result;
-  const failed = result && "error" in result;
+    void loadGraph();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const graphSucceeded = tenantGraph && "data" in tenantGraph;
+  const graphFailed = tenantGraph && "error" in tenantGraph;
 
   return (
-    <main className="shell">
-      <section className="panel">
+    <main className="graph-page">
+      <header className="graph-header">
         <div>
           <h1>AgentGraph</h1>
-          <p>
-            Paste an OpenClaw GitHub issue or pull request URL. AgentGraph loads it into
-            HydraDB, then marks LLM edge enrichment as the next backend stage.
-          </p>
+          <p>OpenClaw tenant memory graph from HydraDB.</p>
         </div>
 
-        <form onSubmit={onSubmit} className="form">
-          <input
-            aria-label="GitHub issue or pull request URL"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://github.com/openclaw/openclaw/issues/1234"
-          />
-          <button type="submit" disabled={loading || !url.trim()}>
-            {loading ? "Loading..." : "Load and Connect"}
-          </button>
-        </form>
-
-        {succeeded ? (
-          <div className="result success">
-            <h2>{result.data.memory.title}</h2>
-            <p className="mono">{result.data.memory.id}</p>
-            <ol>
-              {result.data.stages.map((stage) => (
-                <li key={stage.name}>
-                  <span>{stage.name}</span>
-                  <strong>{stage.status}</strong>
-                  {stage.note ? <p>{stage.note}</p> : null}
-                </li>
-              ))}
-            </ol>
+        {graphSucceeded ? (
+          <div className="edge-summary">
+            <span>Sources: {tenantGraph.data.meta.sourceCount}</span>
+            <span>Nodes: {tenantGraph.data.nodes.length}</span>
+            <span>Edges: {tenantGraph.data.edges.length}</span>
+            <span>Relation sources: {tenantGraph.data.meta.relationSourceCount}</span>
           </div>
         ) : null}
+      </header>
 
-        {failed ? (
+      <section className="graph-stage" aria-busy={loading}>
+        {loading ? <div className="graph-state">Loading HydraDB graph...</div> : null}
+
+        {graphSucceeded ? (
+          <Tenant3DGraph nodes={tenantGraph.data.nodes} edges={tenantGraph.data.edges} />
+        ) : null}
+
+        {graphFailed ? (
           <div className="result error">
-            <h2>Load failed</h2>
-            <p>{result.error.message}</p>
+            <h2>Graph load failed</h2>
+            <p>{tenantGraph.error.message}</p>
           </div>
         ) : null}
       </section>

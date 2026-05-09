@@ -12,6 +12,11 @@ type GitHubApiItem = {
   updated_at?: string;
 };
 
+type GitHubError = {
+  message?: string;
+  documentation_url?: string;
+};
+
 export async function fetchGitHubItem(source: GitHubSourceRef): Promise<GitHubItem> {
   const endpointType = source.type === "pr" ? "pulls" : "issues";
   const response = await fetch(
@@ -26,7 +31,17 @@ export async function fetchGitHubItem(source: GitHubSourceRef): Promise<GitHubIt
   );
 
   if (!response.ok) {
-    throw new Error(`GitHub returned ${response.status} for ${source.url}`);
+    const error = (await response.json().catch(() => ({}))) as GitHubError;
+    const remaining = response.headers.get("x-ratelimit-remaining");
+    const reset = response.headers.get("x-ratelimit-reset");
+    const rateLimit =
+      remaining !== null
+        ? ` rate_limit_remaining=${remaining}${reset ? ` reset=${reset}` : ""}`
+        : "";
+
+    throw new Error(
+      `GitHub returned ${response.status} for ${source.url}: ${error.message ?? response.statusText}.${rateLimit}`
+    );
   }
 
   const json = (await response.json()) as GitHubApiItem;
