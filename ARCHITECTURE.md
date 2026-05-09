@@ -49,6 +49,7 @@ compiled .agent/ context
 - Event ingestion collects GitHub webhook events, Discord discussions, and documentation changes.
 - Extraction uses Pipeshift to identify decisions, constraints, open questions, implementation intent, and relationships.
 - HydraDB stores the memory graph as the source of truth.
+- An automated edge validator constrains LLM-generated relationships before they are written to HydraDB.
 - The context compiler generates minimal issue-specific `.agent` packs.
 - The Next.js UI visualizes issues, PRs, discussions, decisions, and constraints in a 3D graph using `react-force-graph-3d`.
 
@@ -83,6 +84,48 @@ The graph should answer questions like:
 - Which PRs are related to this issue?
 - What constraints should an agent know before editing this area?
 - Which discussions explain the intent behind this code?
+
+## Edge Extraction
+
+AgentGraph should not rely on dumping all issues and PRs into HydraDB and hoping semantic retrieval connects them correctly. It should build graph edges through a two-stage pipeline:
+
+```txt
+OpenClaw issues + PRs + comments + docs
+        |
+        v
+normalize source records
+        |
+        v
+deterministic edge extraction
+        |
+        v
+candidate context retrieval
+        |
+        v
+LLM proposes semantic edges
+        |
+        v
+automated validator
+        |
+        v
+write approved edges + evidence to HydraDB
+```
+
+Deterministic extraction should create hard edges from source metadata and syntax:
+
+- `PR #88 -- closes --> Issue #12`
+- `Issue #12 -- mentions --> Issue #34`
+- `PR #88 -- touches_file --> src/auth/session.ts`
+- `Issue #12 -- has_label --> bug`
+
+The LLM should create semantic edges autonomously, but only through a constrained schema:
+
+- `Issue #12 -- same_root_cause_as --> Issue #34`
+- `Issue #12 -- constrained_by --> Decision: keep local-first gateway`
+- `PR #88 -- implements --> Decision: use pairing policy for unknown DMs`
+- `Issue #12 -- blocked_by --> Issue #56`
+
+Every LLM-created edge must include source, target, type, confidence, and evidence. The automated validator should reject or downgrade edges when source or target IDs do not exist, the edge type is outside the schema, evidence is missing, the evidence quote does not appear in the source text, confidence is below threshold, the edge duplicates an existing edge, or the edge contradicts a stronger deterministic edge.
 
 ## Context Compilation
 
@@ -122,6 +165,7 @@ The compiler should avoid dumping broad organizational memory into agent context
 - HydraDB is the durable memory layer.
 - OpenClaw is the first datasource, not the architecture.
 - `.agent/` is generated output.
+- LLMs may create semantic edges autonomously, but only through schema and evidence validation.
 - Context should be minimal, issue-specific, and agent-readable.
 - The system should preserve implementation intent, not just summarize activity.
 - The UI should make relationships inspectable before context is compiled.
